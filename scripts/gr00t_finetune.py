@@ -89,6 +89,9 @@ class ArgsConfig:
     warmup_ratio: float = 0.05
     """Ratio of total training steps used for warmup."""
 
+    save_total_limit: int = 3
+    """Maximum number of checkpoints to keep."""
+
     lora_rank: int = 0
     """Rank for the LORA model. If 0, no LORA will be used."""
 
@@ -266,7 +269,7 @@ def main(config: ArgsConfig):
         save_strategy="steps",
         save_steps=config.save_steps,
         # evaluation_strategy="no",
-        save_total_limit=8,
+        save_total_limit=config.save_total_limit,,
         report_to=config.report_to,
         seed=42,
         do_eval=False,
