@@ -14,10 +14,10 @@
 # limitations under the License.
 
 import torch
-from numpy.core.multiarray import _reconstruct
+from numpy.core.multiarray import ndarray
 
 # Add numpy's _reconstruct to safe globals for checkpoint loading
-torch.serialization.add_safe_globals([_reconstruct])
+torch.serialization.add_safe_globals([ndarray])
 
 import os
 import subprocess
@@ -26,7 +26,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Literal
 
-import torch
 import tyro
 from transformers import TrainingArguments
 
