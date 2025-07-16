@@ -13,6 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import torch
+from numpy.core.multiarray import _reconstruct
+
+# Add numpy's _reconstruct to safe globals for checkpoint loading
+torch.serialization.add_safe_globals([_reconstruct])
+
 import os
 import subprocess
 import sys
