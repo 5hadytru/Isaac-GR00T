@@ -269,7 +269,7 @@ def main(config: ArgsConfig):
         save_strategy="steps",
         save_steps=config.save_steps,
         # evaluation_strategy="no",
-        save_total_limit=config.save_total_limit,,
+        save_total_limit=config.save_total_limit,
         report_to=config.report_to,
         seed=42,
         do_eval=False,
