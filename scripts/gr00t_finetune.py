@@ -13,11 +13,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
-from numpy.core.multiarray import ndarray
+import torch.serialization
+import numpy
+import numpy.core.multiarray
 
-# Add numpy's _reconstruct to safe globals for checkpoint loading
-torch.serialization.add_safe_globals([ndarray])
+safe_globals = [
+    numpy.ndarray,
+    numpy.core.multiarray._reconstruct, 
+    numpy.dtype
+]
+
+# For numpy >= 1.25, add the new dtype classes
+if hasattr(numpy, 'dtypes'):
+    import numpy.dtypes
+    # Add all the dtype classes that might be in your checkpoint
+    safe_globals.extend([
+        numpy.dtypes.UInt32DType,
+        numpy.dtypes.Float32DType,
+        numpy.dtypes.Float64DType,
+        numpy.dtypes.Int32DType,
+        numpy.dtypes.Int64DType,
+        # Add more as needed based on errors
+    ])
+
+torch.serialization.add_safe_globals(safe_globals)
 
 import os
 import subprocess
