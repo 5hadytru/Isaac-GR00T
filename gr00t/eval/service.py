@@ -19,20 +19,51 @@ from typing import Any, Callable, Dict
 
 import torch
 import zmq
-
+import time
+import numpy as np
+from PIL import Image
+import pickle
 
 class TorchSerializer:
     @staticmethod
     def to_bytes(data: dict) -> bytes:
-        buffer = BytesIO()
-        torch.save(data, buffer)
-        return buffer.getvalue()
+        # Make a copy so we don’t mutate the original
+        data_to_send = {}
+        for k, v in data.items():
+            if isinstance(v, np.ndarray) and v.dtype == np.uint8 and v.ndim in (3, 4):
+                print(k)
+                # Handle (H, W, 3) or (1, H, W, 3)
+                arr = v[0] if v.ndim == 4 else v
+                img = Image.fromarray(arr)
+                buf = BytesIO()
+                img.save(buf, format="JPEG", quality=85)  # tune quality here
+                jpeg_bytes = buf.getvalue()
+                data_to_send[k] = {
+                    "__jpeg__": True,
+                    "shape": v.shape,
+                    "bytes": jpeg_bytes,
+                }
+            else:
+                data_to_send[k] = v
+
+        # Serialize whole dict (now with JPEG-encoded entries)
+        return pickle.dumps(data_to_send)
 
     @staticmethod
     def from_bytes(data: bytes) -> dict:
-        buffer = BytesIO(data)
-        obj = torch.load(buffer, weights_only=False)
-        return obj
+        data_recv = pickle.loads(data)
+        decoded = {}
+        for k, v in data_recv.items():
+            if isinstance(v, dict) and v.get("__jpeg__"):
+                buf = BytesIO(v["bytes"])
+                img = Image.open(buf)
+                arr = np.array(img, dtype=np.uint8)
+                if len(v["shape"]) == 4:  # restore batch dimension
+                    arr = arr[None, ...]
+                decoded[k] = arr
+            else:
+                decoded[k] = v
+        return decoded
 
 
 @dataclass
@@ -176,8 +207,21 @@ class BaseInferenceClient:
         if self.api_token:
             request["api_token"] = self.api_token
 
-        self.socket.send(TorchSerializer.to_bytes(request))
+        print(request["data"]["video.overhead"].shape)
+        print(request["data"]["video.front"].shape)
+
+        payload = TorchSerializer.to_bytes(request)
+        # with open("debug_action_chunk.txt", "a") as f:
+        #     f.write(f"\nSending payload size: {len(payload) / (1024 * 1024):.3f} MB")
+        
+        start = time.time()
+        self.socket.send(payload)
+        # with open("debug_action_chunk.txt", "a") as f:
+        #     f.write(f"\nSend took {(time.time() - start) * 1000}ms")
+        start = time.time()
         message = self.socket.recv()
+        # with open("debug_action_chunk.txt", "a") as f:
+        #     f.write(f"\nReceive took {(time.time() - start) * 1000}ms")
         response = TorchSerializer.from_bytes(message)
 
         if "error" in response:

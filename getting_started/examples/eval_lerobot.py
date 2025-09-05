@@ -131,7 +131,10 @@ class Gr00tRobotInferenceClient:
         #     "state.gripper": np.zeros((1, 1)),
         #     "annotation.human.action.task_description": [self.language_instruction],
         # }
+        start_time = time.time()
         action_chunk = self.policy.get_action(obs_dict)
+        # with open("debug_action_chunk.txt", "a") as f:
+        #     f.write(f"Full get_action took {(time.time() - start_time) * 1000}ms")
 
         # convert the action chunk to a list of dict[str, float]
         lerobot_actions = []
@@ -240,7 +243,7 @@ def eval(cfg: EvalConfig):
             action_dict = action_chunk[i]
             print("action_dict", action_dict.keys())
             robot.send_action(action_dict)
-            time.sleep(0.02)  # Implicitly wait for the action to be executed
+            time.sleep(0.03)  # Implicitly wait for the action to be executed
 
 
 if __name__ == "__main__":
