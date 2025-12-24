@@ -1,14 +1,31 @@
 set -x -e
 
-# huggingface-cli download --repo-type dataset 5hadytru/so101_grasp_2 --local-dir ./examples/SO101/so101_grasp_2 --revision v2.1
-# huggingface-cli download --repo-type dataset 5hadytru/so101_IF_1_v2.1 --local-dir ./examples/SO101/so101_IF_1_v2.1
+"""
+from huggingface_hub import snapshot_download
+from huggingface_hub import login
+
+login()
+
+snapshot_download(
+    repo_id="5hadytru/so101_grasp_2",
+    repo_type="dataset",
+    revision="v3.0",
+    local_dir="/workspace/",
+    local_dir_use_symlinks=False,
+)
+
+d = "so101_grasp_2"
+snapshot_download(
+    repo_id="5hadytru/{d}",
+    repo_type="dataset",
+    local_dir=f"{d}",
+    local_dir_use_symlinks=False,
+)
+"""
 
 export NUM_GPUS=1
-
 source /workspace/export_vars.sh
 export HUGGINGFACE_HUB_CACHE="/workspace/hf_cache"
-
-# torchrun --nproc_per_node=$NUM_GPUS --master_port=29500 \
 CUDA_VISIBLE_DEVICES=0 uv run python \
     gr00t/experiment/launch_finetune.py \
     --base_model_path nvidia/GR00T-N1.6-3B \
