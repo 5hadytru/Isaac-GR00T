@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import tyro
+import torch
 
 from gr00t.configs.base_config import get_default_config
 from gr00t.configs.finetune_config import FinetuneConfig
@@ -43,7 +44,7 @@ if __name__ == "__main__":
                 "download_cache": False,
                 "datasets": [
                     {
-                        "dataset_paths": [ft_config.dataset_path],
+                        "dataset_paths": ft_config.dataset_path,
                         "mix_ratio": 1.0,
                         "embodiment_tag": embodiment_tag,
                     }

@@ -1,5 +1,6 @@
 # Finetune config used for single node post-training.
 from dataclasses import dataclass
+from typing import List
 
 from gr00t.data.embodiment_tags import EmbodimentTag
 
@@ -19,7 +20,7 @@ class FinetuneConfig:
     base_model_path: str
     """Path to the pretrained base model checkpoint (e.g., Hugging Face model hub or local directory)."""
 
-    dataset_path: str
+    dataset_path: List[str]
     """Path to the dataset root directory containing trajectory data for fine-tuning."""
 
     embodiment_tag: EmbodimentTag
