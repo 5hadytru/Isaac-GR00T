@@ -19,7 +19,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python \
     --embodiment_tag NEW_EMBODIMENT \
     --num_gpus $NUM_GPUS \
     --output_dir /workspace/so101_GR00T-N1.6-3B_v5_1 \
-    --save_steps 250 \
+    --save_steps 500 \
     --save_total_limit 1 \
     --max_steps 60000 \
     --warmup_ratio 0.05 \
@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python \
     --use_wandb \
     --global_batch_size 128 \
     --color_jitter_params brightness 0.3 contrast 0.4 saturation 0.5 hue 0.08 \
-    --dataloader_num_workers 4
+    --dataloader_num_workers 1
 
 """
 uv run python scripts/lerobot_conversion/convert_v3_to_v2.py --repo-id 5hadytru/so101_grasp_3 --root examples/SO101/so101_grasp_3
