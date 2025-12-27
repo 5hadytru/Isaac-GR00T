@@ -28,7 +28,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python \
     --use_wandb \
     --global_batch_size 128 \
     --color_jitter_params brightness 0.3 contrast 0.4 saturation 0.5 hue 0.08 \
-    --dataloader_num_workers 1
+    --dataloader_num_workers 4
 
 """
 uv run python scripts/lerobot_conversion/convert_v3_to_v2.py --repo-id 5hadytru/so101_grasp_3 --root examples/SO101/so101_grasp_3

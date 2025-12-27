@@ -255,6 +255,7 @@ def run(config: Config):
             logging.info(f"Saved {len(initial_actions)} initial actions to {initial_actions_path}")
 
     # Train
+    train_dataset.print_dataset_statistics()
     logging.info("🚀 Starting training...")
     if config.training.enable_profiling:
         from functools import partial
