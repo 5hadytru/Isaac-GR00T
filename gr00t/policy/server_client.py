@@ -199,13 +199,14 @@ class PolicyServer:
                 message = self.socket.recv()
                 request = MsgSerializer.from_bytes(message)
 
-                request["data"]["observation"]["video"] = decompress_obs_images(request["data"]["observation"]["video"])
+                print(lambda d, i=0: [print("  "*i + str(k)) or isinstance(v, dict) and (lambda: (print("  "*(i+1) + "{"), (lambda r=r: r)(None), print("  "*(i+1) + "}")))() or (lambda: (lambda f: f(f, v, i+1))(lambda f, d, i: [print("  "*i + str(k)) or isinstance(v, dict) and f(f, v, i+1) for k, v in d.items()]))() for k, v in d.items()])(request)
+                request["data"]["observation"]["video"]["observations"]["image"] = decompress_obs_images(request["data"]["observation"]["video"]["observations"]["image"])
 
-                for k, v in request["data"]["observation"].items():
-                    if isinstance(v, np.ndarray):
-                        print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-                    else:
-                        print(f"c_obs[{k}]: {type(v)}")
+                # for k, v in request["data"]["observation"]["video"].items():
+                #     if isinstance(v, np.ndarray):
+                #         print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+                #     else:
+                #         print(f"c_obs[{k}]: {type(v)}")
 
                 # Validate token before processing request
                 if not self._validate_token(request):
