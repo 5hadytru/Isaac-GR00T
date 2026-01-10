@@ -91,6 +91,8 @@ def decompress_obs_images(
                 arr = arr[..., ::-1]
             out[k] = arr
 
+            print(k, arr.shape, type(arr))
+
     return out
 # image compression stuff
 
