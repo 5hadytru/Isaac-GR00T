@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 import io
 from typing import Any, Callable
@@ -13,8 +15,6 @@ from .policy import BasePolicy
 
 
 # image compression stuff
-from __future__ import annotations
-
 from typing import Any, Dict, Iterable, Tuple, Optional
 import base64
 import numpy as np

@@ -18,6 +18,7 @@ for real-world policy debugging and demos.
 # =============================================================================
 # Imports
 # =============================================================================
+from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import logging
@@ -43,8 +44,6 @@ import numpy as np
 
 
 # image compression stuff
-from __future__ import annotations
-
 from typing import Any, Dict, Iterable, Tuple, Optional
 import base64
 import numpy as np
