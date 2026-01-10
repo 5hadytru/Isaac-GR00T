@@ -234,7 +234,7 @@ def eval(cfg: EvalConfig):
         #     else:
         #         print(f"c_obs[{k}]: {type(v)}")
 
-        actions = policy.get_action(compress_obs_images(obs))
+        actions = policy.get_action(obs)
 
         for i, action_dict in enumerate(actions[: cfg.action_horizon]):
             tic = time.time()

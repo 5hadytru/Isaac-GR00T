@@ -1,3 +1,5 @@
+import os
+import zlib
 from dataclasses import dataclass
 import io
 from typing import Any, Callable
@@ -12,6 +14,29 @@ from gr00t.data.utils import to_json_serializable
 from .policy import BasePolicy
 
 class MsgSerializer:
+    """MsgPack serializer with special-cases for numpy arrays.
+
+    This compresses *image-like* uint8 ndarrays (H×W or H×W×C) into a byte payload
+    on the sender, and recreates the ndarray on the receiver.
+
+    Environment variables:
+      - GROOT_IMG_CODEC: 'jpg' (default), 'webp', 'png', or 'zlib_raw'
+      - GROOT_JPEG_QUALITY: 0-100 (default 80)
+      - GROOT_WEBP_QUALITY: 0-100 (default 80)
+    """
+
+    # Optional fast codecs (recommended on BOTH sides)
+    try:
+        import cv2  # type: ignore
+    except Exception:
+        cv2 = None  # type: ignore
+
+    # Fallback codec (works, but note RGB/BGR caveat below)
+    try:
+        from PIL import Image  # type: ignore
+    except Exception:
+        Image = None  # type: ignore
+
     @staticmethod
     def to_bytes(data: Any) -> bytes:
         return msgpack.packb(data, default=MsgSerializer.encode_custom_classes)
@@ -21,11 +46,117 @@ class MsgSerializer:
         return msgpack.unpackb(data, object_hook=MsgSerializer.decode_custom_classes)
 
     @staticmethod
+    def _is_probably_image(arr: np.ndarray) -> bool:
+        if arr.dtype != np.uint8:
+            return False
+        if arr.ndim == 2:
+            h, w = arr.shape
+            return h >= 32 and w >= 32 and (h * w) >= 32_000
+        if arr.ndim == 3:
+            h, w, c = arr.shape
+            if c not in (1, 3, 4):
+                return False
+            return h >= 32 and w >= 32 and (h * w) >= 32_000
+        return False
+
+    @staticmethod
+    def _encode_image(arr: np.ndarray) -> dict:
+        codec = os.environ.get("GROOT_IMG_CODEC", "jpg").lower()
+        jpeg_q = int(os.environ.get("GROOT_JPEG_QUALITY", "80"))
+        webp_q = int(os.environ.get("GROOT_WEBP_QUALITY", "80"))
+
+        # Some encoders want (H,W) not (H,W,1)
+        arr_for_codec = arr[:, :, 0] if (arr.ndim == 3 and arr.shape[2] == 1) else arr
+
+        # 1) OpenCV (best if your frames are from OpenCV, i.e. BGR)
+        if MsgSerializer.cv2 is not None and codec in ("jpg", "jpeg", "png", "webp"):
+            ext = ".jpg" if codec in ("jpg", "jpeg") else f".{codec}"
+            params = []
+            if codec in ("jpg", "jpeg"):
+                params = [int(MsgSerializer.cv2.IMWRITE_JPEG_QUALITY), int(jpeg_q)]
+            elif codec == "webp":
+                params = [int(MsgSerializer.cv2.IMWRITE_WEBP_QUALITY), int(webp_q)]
+
+            ok, enc = MsgSerializer.cv2.imencode(ext, arr_for_codec, params)
+            if ok:
+                return {
+                    "__ndarray_img__": True,
+                    "codec": "jpg" if codec == "jpeg" else codec,
+                    "shape": arr.shape,
+                    "data": enc.tobytes(),
+                }
+
+        # 2) Pillow fallback (portable, but assumes RGB semantics for color images)
+        if MsgSerializer.Image is not None and codec in ("jpg", "jpeg", "png", "webp"):
+            bio = io.BytesIO()
+            pil_mode = "L" if arr_for_codec.ndim == 2 else ("RGBA" if arr.shape[-1] == 4 else "RGB")
+            im = MsgSerializer.Image.fromarray(arr_for_codec, mode=pil_mode)
+            if codec in ("jpg", "jpeg"):
+                im.save(bio, format="JPEG", quality=jpeg_q, optimize=True)
+            elif codec == "png":
+                im.save(bio, format="PNG", optimize=True)
+            else:  # webp
+                im.save(bio, format="WEBP", quality=webp_q)
+            return {
+                "__ndarray_img__": True,
+                "codec": "jpg" if codec == "jpeg" else codec,
+                "shape": arr.shape,
+                "data": bio.getvalue(),
+            }
+
+        # 3) Last resort: exact bytes + zlib (no extra deps, weaker compression)
+        raw = arr.tobytes(order="C")
+        comp = zlib.compress(raw, level=6)
+        return {
+            "__ndarray_img__": True,
+            "codec": "zlib_raw",
+            "shape": arr.shape,
+            "dtype": str(arr.dtype),
+            "data": comp,
+        }
+
+    @staticmethod
+    def _decode_image(obj: dict) -> np.ndarray:
+        codec = obj.get("codec", "jpg")
+        shape = obj.get("shape")
+        if isinstance(shape, list):
+            shape = tuple(shape)
+        data = obj.get("data", b"")
+
+        if codec == "zlib_raw":
+            dtype = np.dtype(obj.get("dtype", "uint8"))
+            raw = zlib.decompress(data)
+            arr = np.frombuffer(raw, dtype=dtype).reshape(shape)
+            return arr
+
+        # OpenCV decode (recommended)
+        if MsgSerializer.cv2 is not None and codec in ("jpg", "png", "webp"):
+            buf = np.frombuffer(data, dtype=np.uint8)
+            img = MsgSerializer.cv2.imdecode(buf, MsgSerializer.cv2.IMREAD_UNCHANGED)
+            if isinstance(shape, tuple) and len(shape) == 3 and shape[2] == 1 and img.ndim == 2:
+                img = img[:, :, None]
+            return img
+
+        # Pillow fallback
+        if MsgSerializer.Image is not None and codec in ("jpg", "png", "webp"):
+            im = MsgSerializer.Image.open(io.BytesIO(data))
+            arr = np.array(im)
+            if isinstance(shape, tuple) and len(shape) == 3 and shape[2] == 1 and arr.ndim == 2:
+                arr = arr[:, :, None]
+            return arr
+
+        raise RuntimeError(
+            f"Unsupported image codec '{codec}'. Install opencv-python(-headless) or pillow."
+        )
+
+    @staticmethod
     def decode_custom_classes(obj):
         if not isinstance(obj, dict):
             return obj
         if "__ModalityConfig_class__" in obj:
             return ModalityConfig(**obj["as_json"])
+        if "__ndarray_img__" in obj:
+            return MsgSerializer._decode_image(obj)
         if "__ndarray_class__" in obj:
             return np.load(io.BytesIO(obj["as_npy"]), allow_pickle=False)
         return obj
@@ -35,11 +166,12 @@ class MsgSerializer:
         if isinstance(obj, ModalityConfig):
             return {"__ModalityConfig_class__": True, "as_json": to_json_serializable(obj)}
         if isinstance(obj, np.ndarray):
+            if MsgSerializer._is_probably_image(obj):
+                return MsgSerializer._encode_image(obj)
             output = io.BytesIO()
             np.save(output, obj, allow_pickle=False)
             return {"__ndarray_class__": True, "as_npy": output.getvalue()}
         return obj
-
 
 @dataclass
 class EndpointHandler:
