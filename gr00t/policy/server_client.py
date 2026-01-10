@@ -197,6 +197,8 @@ class PolicyServer:
                 message = self.socket.recv()
                 request = MsgSerializer.from_bytes(message)
 
+                request = decompress_obs_images(request)
+
                 # Validate token before processing request
                 if not self._validate_token(request):
                     self.socket.send(
@@ -301,7 +303,7 @@ class PolicyClient(BasePolicy):
         self, observation: dict[str, Any], options: dict[str, Any] | None = None
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         response = self.call_endpoint(
-            "get_action", {"observation": decompress_obs_images(observation), "options": options}
+            "get_action", {"observation": observation, "options": options}
         )
         return tuple(response)  # Convert list (from msgpack) to tuple of (action, info)
 

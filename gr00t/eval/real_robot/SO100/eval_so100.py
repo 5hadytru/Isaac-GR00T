@@ -18,8 +18,6 @@ for real-world policy debugging and demos.
 # =============================================================================
 # Imports
 # =============================================================================
-from __future__ import annotations
-
 from dataclasses import asdict, dataclass
 import logging
 from pprint import pformat
@@ -44,7 +42,6 @@ import numpy as np
 
 
 # image compression stuff
-from typing import Iterable, Tuple, Optional
 import base64
 
 def _is_uint8_hwc3(x: Any) -> bool:
@@ -56,15 +53,15 @@ def _is_uint8_hwc3(x: Any) -> bool:
     )
 
 def compress_obs_images(
-    obs: Dict[str, Any],
+    obs,
     *,
-    image_keys: Iterable[str] = ("front", "overhead"),
+    image_keys = ("front", "overhead"),
     codec: str = "jpg",               # "jpg" or "png" (jpg recommended for bandwidth)
     quality: int = 70,                # for jpg/webp; 1-100
     png_compression: int = 3,         # 0-9 (higher = smaller/slower)
     assume_rgb: bool = True,          # if True, preserves RGB when using OpenCV
     base64_encode: bool = False,      # True if you need JSON-safe strings
-) -> Dict[str, Any]:
+):
     """
     Returns a shallow-copied obs dict where selected images are replaced by a compressed payload:
       {"__compressed__": True, "codec": ..., "data": bytes or b64 str, "shape": ..., "dtype": "uint8", "color": "rgb|bgr"}
@@ -333,11 +330,16 @@ def eval(cfg: EvalConfig):
         #     "lang": cfg.lang_instruction,
         # }
 
-        # for k, v in obs.items():
-        #     if isinstance(v, np.ndarray):
-        #         print(f"obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-        #     else:
-        #         print(f"obs[{k}]: {v}")
+        for k, v in obs.items():
+            if isinstance(v, np.ndarray):
+                print(f"obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+            else:
+                print(f"obs[{k}]: {v}")
+        for k, v in compress_obs_images(obs).items():
+            if isinstance(v, np.ndarray):
+                print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+            else:
+                print(f"c_obs[{k}]: {type(v)}")
 
         actions = policy.get_action(compress_obs_images(obs))
 
