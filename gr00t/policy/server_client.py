@@ -199,9 +199,9 @@ class PolicyServer:
                 message = self.socket.recv()
                 request = MsgSerializer.from_bytes(message)
 
-                # request["data"] = decompress_obs_images(request["data"])
+                request["data"]["observation"] = decompress_obs_images(request["data"]["observation"])
 
-                for k, v in request["data"].items():
+                for k, v in request["data"]["observation"].items():
                     if isinstance(v, np.ndarray):
                         print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
                     else:
