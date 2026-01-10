@@ -44,9 +44,8 @@ import numpy as np
 
 
 # image compression stuff
-from typing import Any, Dict, Iterable, Tuple, Optional
+from typing import Iterable, Tuple, Optional
 import base64
-import numpy as np
 
 def _is_uint8_hwc3(x: Any) -> bool:
     return (
