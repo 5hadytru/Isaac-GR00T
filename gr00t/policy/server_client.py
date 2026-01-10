@@ -199,13 +199,13 @@ class PolicyServer:
                 message = self.socket.recv()
                 request = MsgSerializer.from_bytes(message)
 
-                request = decompress_obs_images(request)
+                request["data"] = decompress_obs_images(request["data"])
 
-                for k, v in request.items():
-                    if isinstance(v, np.ndarray):
-                        print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-                    else:
-                        print(f"c_obs[{k}]: {type(v)}")
+                # for k, v in request["data"].items():
+                #     if isinstance(v, np.ndarray):
+                #         print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+                #     else:
+                #         print(f"c_obs[{k}]: {type(v)}")
 
                 # Validate token before processing request
                 if not self._validate_token(request):
