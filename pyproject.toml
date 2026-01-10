@@ -24,7 +24,6 @@ dependencies = [
     "torchvision==0.22.0",
     "transformers==4.51.3",
     "tyro==0.9.17",
-    "flash-attn==2.7.4.post1",
     "click==8.1.8",
     "datasets==3.6.0",
     "einops==0.8.1",
@@ -36,7 +35,10 @@ dependencies = [
     "torchcodec==0.4.0",
     "wandb==0.23.0",
     "pyzmq==27.0.1",
-    "deepspeed==0.17.6",
+
+    # CUDA-only
+    'flash-attn==2.7.4.post1 ; platform_system == "Linux"',
+    'deepspeed==0.17.6 ; platform_system == "Linux"',
 ]
 
 [project.optional-dependencies]
