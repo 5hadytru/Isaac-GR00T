@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 import io
 from typing import Any, Callable
@@ -12,89 +10,6 @@ from gr00t.data.types import ModalityConfig
 from gr00t.data.utils import to_json_serializable
 
 from .policy import BasePolicy
-
-
-# image compression stuff
-from typing import Any, Dict, Iterable, Tuple, Optional
-import base64
-import numpy as np
-
-def _is_uint8_hwc3(x: Any) -> bool:
-    return (
-        isinstance(x, np.ndarray)
-        and x.dtype == np.uint8
-        and x.ndim == 3
-        and x.shape[2] == 3
-    )
-
-def decompress_obs_images(
-    obs: Dict[str, Any],
-    *,
-    image_keys: Iterable[str] = ("front", "overhead"),
-    base64_encoded: Optional[bool] = None,  # None = auto-detect if str vs bytes
-) -> Dict[str, Any]:
-    """
-    Inverse of compress_obs_images(): returns obs with compressed payloads restored to np.uint8 HxWx3 arrays.
-    """
-    out: Dict[str, Any] = dict(obs)
-
-    try:
-        import cv2  # type: ignore
-        use_cv2 = True
-    except Exception:
-        use_cv2 = False
-
-    for k in image_keys:
-        if k not in obs:
-            continue
-        payload = obs[k]
-        if not (isinstance(payload, dict) and payload.get("__compressed__") is True):
-            continue
-
-        codec = str(payload.get("codec", "jpg")).lower()
-        data = payload.get("data")
-        color = payload.get("color", "rgb")  # original color convention
-        if data is None:
-            raise ValueError(f"Missing data for compressed key={k}")
-
-        if base64_encoded is None:
-            is_b64 = isinstance(data, str)
-        else:
-            is_b64 = base64_encoded
-
-        if is_b64:
-            data_bytes = base64.b64decode(data.encode("ascii"))
-        else:
-            if not isinstance(data, (bytes, bytearray, memoryview)):
-                raise TypeError(f"Expected bytes-like for key={k}, got {type(data)}")
-            data_bytes = bytes(data)
-
-        if use_cv2:
-            import numpy as _np
-            buf = _np.frombuffer(data_bytes, dtype=_np.uint8)
-            img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
-            if img is None:
-                raise RuntimeError(f"cv2.imdecode failed for key={k}, codec={codec}")
-            # cv2 returns BGR; convert back to RGB if original was RGB
-            if color == "rgb":
-                img = img[..., ::-1]  # BGR -> RGB
-            out[k] = img.astype(np.uint8, copy=False)
-
-        else:
-            from io import BytesIO
-            from PIL import Image  # type: ignore
-
-            im = Image.open(BytesIO(data_bytes)).convert("RGB")
-            arr = np.array(im, dtype=np.uint8)
-            # arr is RGB; if original was BGR, flip back
-            if color == "bgr":
-                arr = arr[..., ::-1]
-            out[k] = arr
-
-            print(k, arr.shape, type(arr))
-
-    return out
-# image compression stuff
 
 class MsgSerializer:
     @staticmethod
@@ -198,15 +113,6 @@ class PolicyServer:
             try:
                 message = self.socket.recv()
                 request = MsgSerializer.from_bytes(message)
-
-                print(lambda d, i=0: [print("  "*i + str(k)) or isinstance(v, dict) and (lambda: (print("  "*(i+1) + "{"), (lambda r=r: r)(None), print("  "*(i+1) + "}")))() or (lambda: (lambda f: f(f, v, i+1))(lambda f, d, i: [print("  "*i + str(k)) or isinstance(v, dict) and f(f, v, i+1) for k, v in d.items()]))() for k, v in d.items()])(request)
-                request["data"]["observation"]["video"]["observations"]["image"] = decompress_obs_images(request["data"]["observation"]["video"]["observations"]["image"])
-
-                # for k, v in request["data"]["observation"]["video"].items():
-                #     if isinstance(v, np.ndarray):
-                #         print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-                #     else:
-                #         print(f"c_obs[{k}]: {type(v)}")
 
                 # Validate token before processing request
                 if not self._validate_token(request):

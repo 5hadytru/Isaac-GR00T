@@ -40,113 +40,6 @@ from lerobot.robots import (  # noqa: F401
 from lerobot.utils.utils import init_logging, log_say
 import numpy as np
 
-
-# image compression stuff
-import base64
-
-def _is_uint8_hwc3(x: Any) -> bool:
-    return (
-        isinstance(x, np.ndarray)
-        and x.dtype == np.uint8
-        and x.ndim == 3
-        and x.shape[2] == 3
-    )
-
-def compress_obs_images(
-    obs,
-    *,
-    image_keys = ("front", "overhead"),
-    codec: str = "jpg",               # "jpg" or "png" (jpg recommended for bandwidth)
-    quality: int = 70,                # for jpg/webp; 1-100
-    png_compression: int = 3,         # 0-9 (higher = smaller/slower)
-    assume_rgb: bool = True,          # if True, preserves RGB when using OpenCV
-    base64_encode: bool = False,      # True if you need JSON-safe strings
-):
-    """
-    Returns a shallow-copied obs dict where selected images are replaced by a compressed payload:
-      {"__compressed__": True, "codec": ..., "data": bytes or b64 str, "shape": ..., "dtype": "uint8", "color": "rgb|bgr"}
-    """
-    out: Dict[str, Any] = dict(obs)
-
-    # Prefer OpenCV if available (fast). Fall back to PIL if not.
-    try:
-        import cv2  # type: ignore
-        use_cv2 = True
-    except Exception:
-        use_cv2 = False
-
-    for k in image_keys:
-        if k not in obs:
-            continue
-        img = obs[k]
-        if not _is_uint8_hwc3(img):
-            continue
-
-        h, w, c = img.shape
-        if c != 3:
-            raise ValueError(f"Expected 3 channels for {k}, got {img.shape}")
-
-        codec_l = codec.lower().lstrip(".")
-        if use_cv2:
-            enc_img = img
-            color = "rgb" if assume_rgb else "bgr"
-            # OpenCV treats arrays as BGR for typical image conventions; convert if your arrays are RGB.
-            if assume_rgb:
-                enc_img = img[..., ::-1]  # RGB -> BGR
-
-            if codec_l in ("jpg", "jpeg"):
-                params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]
-                ext = ".jpg"
-            elif codec_l == "png":
-                params = [int(cv2.IMWRITE_PNG_COMPRESSION), int(png_compression)]
-                ext = ".png"
-            else:
-                raise ValueError(f"Unsupported codec for cv2: {codec}. Use 'jpg' or 'png'.")
-
-            ok, buf = cv2.imencode(ext, enc_img, params)
-            if not ok:
-                raise RuntimeError(f"cv2.imencode failed for key={k}, codec={codec_l}")
-            data_bytes = buf.tobytes()
-
-        else:
-            from io import BytesIO
-            from PIL import Image  # type: ignore
-
-            if not assume_rgb:
-                # If your arrays are BGR, convert to RGB before PIL.
-                pil_arr = img[..., ::-1]
-                color = "bgr"
-            else:
-                pil_arr = img
-                color = "rgb"
-
-            im = Image.fromarray(pil_arr, mode="RGB")
-            bio = BytesIO()
-            if codec_l in ("jpg", "jpeg"):
-                im.save(bio, format="JPEG", quality=int(quality), optimize=True)
-            elif codec_l == "png":
-                im.save(bio, format="PNG", compress_level=int(png_compression))
-            else:
-                raise ValueError(f"Unsupported codec for PIL: {codec}. Use 'jpg' or 'png'.")
-            data_bytes = bio.getvalue()
-
-        data: Any = data_bytes
-        if base64_encode:
-            data = base64.b64encode(data_bytes).decode("ascii")
-
-        out[k] = {
-            "__compressed__": True,
-            "codec": codec_l,
-            "data": data,
-            "shape": (h, w, c),
-            "dtype": "uint8",
-            "color": color,          # what the ORIGINAL obs used (so we can restore correctly)
-            "assume_rgb": assume_rgb # stored for clarity/debugging
-        }
-
-    return out
-# image compression stuff
-
 def recursive_add_extra_dim(obs: Dict) -> Dict:
     """
     Recursively add an extra dim to arrays or scalars.
@@ -320,7 +213,7 @@ def eval(cfg: EvalConfig):
 
         # obs = {
         #     "front": np.zeros((480, 640, 3), dtype=np.uint8),
-        #     "wrist": np.zeros((480, 640, 3), dtype=np.uint8),
+        #     "overhead": np.zeros((480, 640, 3), dtype=np.uint8),
         #     "shoulder_pan.pos": 0.0,
         #     "shoulder_lift.pos": 0.0,
         #     "elbow_flex.pos": 0.0,
@@ -330,16 +223,16 @@ def eval(cfg: EvalConfig):
         #     "lang": cfg.lang_instruction,
         # }
 
-        for k, v in obs.items():
-            if isinstance(v, np.ndarray):
-                print(f"obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-            else:
-                print(f"obs[{k}]: {v}")
-        for k, v in compress_obs_images(obs).items():
-            if isinstance(v, np.ndarray):
-                print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
-            else:
-                print(f"c_obs[{k}]: {type(v)}")
+        # for k, v in obs.items():
+        #     if isinstance(v, np.ndarray):
+        #         print(f"obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+        #     else:
+        #         print(f"obs[{k}]: {v}")
+        # for k, v in compress_obs_images(obs).items():
+        #     if isinstance(v, np.ndarray):
+        #         print(f"c_obs[{k}]: shape={v.shape}, dtype={v.dtype}")
+        #     else:
+        #         print(f"c_obs[{k}]: {type(v)}")
 
         actions = policy.get_action(compress_obs_images(obs))
 
