@@ -13,6 +13,8 @@ from gr00t.data.utils import to_json_serializable
 
 from .policy import BasePolicy
 
+from time import perf_counter
+
 class MsgSerializer:
     """MsgPack serializer with special-cases for numpy arrays.
 
@@ -244,7 +246,10 @@ class PolicyServer:
         while self.running:
             try:
                 message = self.socket.recv()
+
+                t_dec0 = perf_counter()
                 request = MsgSerializer.from_bytes(message)
+                t_dec1 = perf_counter()
 
                 # Validate token before processing request
                 if not self._validate_token(request):
@@ -259,11 +264,25 @@ class PolicyServer:
                     raise ValueError(f"Unknown endpoint: {endpoint}")
 
                 handler = self._endpoints[endpoint]
+                t_h0 = perf_counter()
                 result = (
                     handler.handler(**request.get("data", {}))
                     if handler.requires_input
                     else handler.handler()
                 )
+                t_h1 = perf_counter()
+
+                # Attach server timing to info for get_action
+                if endpoint == "get_action" and isinstance(result, (list, tuple)) and len(result) == 2:
+                    action, info = result
+                    if not isinstance(info, dict):
+                        info = {"info": info}
+                    info.setdefault("_timing", {})["server"] = {
+                        "decode_s": t_dec1 - t_dec0,
+                        "handler_s": t_h1 - t_h0,  # "forward pass" bucket
+                    }
+                    result = (action, info)
+
                 self.socket.send(MsgSerializer.to_bytes(result))
             except Exception as e:
                 print(f"Error in server: {e}")
@@ -331,11 +350,55 @@ class PolicyClient(BasePolicy):
         if self.api_token:
             request["api_token"] = self.api_token
 
-        self.socket.send(MsgSerializer.to_bytes(request))
+        t0 = perf_counter()
+        req_bytes = MsgSerializer.to_bytes(request)
+        t1 = perf_counter()
+
+        self.socket.send(req_bytes)
+        t2 = perf_counter()
+
         message = self.socket.recv()
-        if message == b"ERROR":
-            raise RuntimeError("Server error. Make sure we are running the correct policy server.")
+        t3 = perf_counter()
+
         response = MsgSerializer.from_bytes(message)
+        t4 = perf_counter()
+
+        ct = {
+            "pack_s": t1 - t0,
+            "wait_s": t3 - t2,    # network + server compute + network
+            "unpack_s": t4 - t3,
+            "total_s": t4 - t0,
+        }
+
+        # If this is get_action, stash client timing into the returned info dict too
+        server_t = None
+        if endpoint == "get_action" and isinstance(response, (list, tuple)) and len(response) == 2:
+            action, info = response
+            if not isinstance(info, dict):
+                info = {"info": info}
+            info.setdefault("_timing", {})["client"] = ct
+            server_t = info["_timing"].get("server")
+            response = [action, info]  # keep it mutable/consistent
+
+        # Print a single line per get_action
+        if os.environ.get("GROOT_TIMING_PRINT", "0") == "1" and endpoint == "get_action":
+            if server_t:
+                forward_ms = server_t["handler_s"] * 1e3
+                # "network-ish" ≈ client wait minus server decode+handler (doesn't include client pack/unpack)
+                net_ms = (ct["wait_s"] - (server_t["decode_s"] + server_t["handler_s"])) * 1e3
+                print(
+                    f"[timing] pack={ct['pack_s']*1e3:.1f}ms "
+                    f"wait={ct['wait_s']*1e3:.1f}ms "
+                    f"unpack={ct['unpack_s']*1e3:.1f}ms | "
+                    f"forward≈{forward_ms:.1f}ms net≈{net_ms:.1f}ms total={ct['total_s']*1e3:.1f}ms"
+                )
+            else:
+                print(
+                    f"[timing] pack={ct['pack_s']*1e3:.1f}ms "
+                    f"wait={ct['wait_s']*1e3:.1f}ms "
+                    f"unpack={ct['unpack_s']*1e3:.1f}ms total={ct['total_s']*1e3:.1f}ms"
+                )
+
 
         if isinstance(response, dict) and "error" in response:
             raise RuntimeError(f"Server error: {response['error']}")
