@@ -24,6 +24,12 @@ from pprint import pformat
 import time
 from typing import Any, Dict, List
 
+from datetime import datetime
+import atexit
+
+import cv2
+from pathlib import Path
+
 import draccus
 from gr00t.policy.server_client import PolicyClient
 
@@ -204,12 +210,35 @@ def eval(cfg: EvalConfig):
         blocking=True,
     )
 
+    out_dir = Path("latest_frames")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     # -------------------------------------------------------------------------
     # 3. Main real-time control loop
     # -------------------------------------------------------------------------
     while True:
         obs = robot.get_observation()
         obs["lang"] = cfg.lang_instruction  # insert language
+
+        capture = False
+        if capture:
+            for cam_key in ("front", "overhead"):
+                frame = obs.get(cam_key)
+                if frame is None:
+                    # Some stacks put images under obs["video"][cam_key]
+                    video = obs.get("video", {})
+                    frame = video.get(cam_key)
+                if frame is None:
+                    continue
+
+                # Ensure contiguous uint8
+                frame = np.ascontiguousarray(frame)
+
+                # If your frames are RGB (common), OpenCV expects BGR for correct colors:
+                frame_to_save = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR) if frame.ndim == 3 and frame.shape[2] == 3 else frame
+
+                cv2.imwrite(str(out_dir / f"{cam_key}.jpg"), frame_to_save)
+
 
         # obs = {
         #     "front": np.zeros((480, 640, 3), dtype=np.uint8),
