@@ -12,7 +12,7 @@ from gr00t.data.types import (
 so101_config = {
     "video": ModalityConfig(
         delta_indices=[0],
-        modality_keys=["overhead", "front"],
+        modality_keys=["overhead", "front", "overhead_init"],
     ),
     "state": ModalityConfig(
         delta_indices=[0],

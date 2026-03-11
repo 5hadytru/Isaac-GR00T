@@ -25,6 +25,9 @@
         },
         "front": {
             "original_key": "observation.images.front"
+        },
+        "overhead_init": {
+            "original_key": "observation.images.overhead_init"
         }
     },
     "annotation": {
